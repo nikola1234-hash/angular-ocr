@@ -13,10 +13,12 @@ export class TextRecognitionComponent {
   imagePath: string = '';
   lines: string[] = [];
   tempText: string[] = [];
-  recognizedText: { text: string, bbox: any}[] = [];
+  recognizedText: { text: string, bbox: any, staticX0?: number}[] = [];
   @ViewChild('imgElement') imgElement: ElementRef<HTMLImageElement> | undefined;
   @ViewChild('canvasElement') canvasElement: ElementRef<HTMLCanvasElement> | undefined;
   canvasContext: CanvasRenderingContext2D | undefined;
+
+  xIndexStore: number [] = [];
 
   resizing: boolean = false;
   lastMousePosition: { x: number, y: number } | null = null;
@@ -47,7 +49,8 @@ lastMouseY: number | null = null;
         this.tempText = res.data.text.split('\n');
         const totalLines = this.tempText.length;
         this.lines = Array(totalLines - 1).fill('');
-        this.recognizedText = res.data.lines.map((line: { text: any; bbox: any; }) => ({
+        this.recognizedText = res.data.lines.map((line: { text: any; bbox: any; startIdx: number}) => ({
+
           text: line.text,
           bbox: line.bbox
       }));
@@ -69,38 +72,44 @@ onImageLoad(event: any) {
   this.canvasContext = canvas.getContext('2d') ?? undefined;
 }
 highlightText(index: number) {
-
   this.clearCanvas();
 
+  if (!this.canvasContext) {
+      return;
+  }
+  if (!this.canvasElement) {
+      return;
+  }
+  for (let i = 0; i < this.lines.length; i++) {
+      const inputText = this.lines[i];
 
-        if(!this.canvasContext){
-          return;
-        }
-        if(!this.canvasElement){
-          return;
-        }
-        for (let i = 0; i < this.lines.length; i++) {
-          const inputText = this.lines[i];
+      const recognizedLine = this.recognizedText[i]?.text;
 
-          const recognizedLine = this.recognizedText[i]?.text;
+      if (recognizedLine && inputText && recognizedLine.includes(inputText)) {
+          this.canvasContext.strokeStyle = 'red';
+          this.canvasContext.lineWidth = 3;
 
-          if (recognizedLine?.startsWith(inputText) && inputText !== "") {
-              this.canvasContext.strokeStyle = 'red';
-              this.canvasContext.lineWidth = 3;
+          const bbox = this.recognizedText[i].bbox;
+          const averageCharWidth = (bbox.x1 - bbox.x0) / recognizedLine.length;
 
-              const bbox = this.recognizedText[i].bbox;
+          // Calculate the start position of the input text within the recognized line
+          const startIdx = recognizedLine.indexOf(inputText);
+          // Check if staticX0 exists for this line. If it does, use it.
+          let x0 = this.recognizedText[i].staticX0 ?? (bbox.x0 + averageCharWidth * startIdx);
 
-              const averageCharWidth = (bbox.x1 - bbox.x0) / recognizedLine.length;
-
-              const x0 = bbox.x0;
-              const y0 = bbox.y0;
-              const x1 = bbox.x0 + averageCharWidth * inputText.length +3;
-              const y1 = bbox.y1;
-
-              this.canvasContext.strokeRect(x0, y0, x1, y1 - y0);
+          // If staticX0 hasn't been set yet, set it now
+          if (!this.recognizedText[i].staticX0) {
+              this.recognizedText[i].staticX0 = x0;
           }
+          console.log(x0);
+          const y0 = bbox.y0;
+          const x1 = x0 + averageCharWidth * inputText.length;
+          const y1 = bbox.y1;
+
+          this.canvasContext.strokeRect(x0, y0, x1 - x0, y1 - y0);
       }
-    }
+  }
+}
 
 clearCanvas() {
   if(!this.canvasContext){
@@ -130,23 +139,21 @@ clearCanvas() {
         }
     }
   }
-  onMouseMove(event: MouseEvent) {
+ onMouseMove(event: MouseEvent) {
     if (!this.resizing || !this.lastMousePosition || this.resizeTargetIndex === null) return;
 
     const mouseX = event.offsetX;
     const mouseY = event.offsetY;
 
     const dx = mouseX - this.lastMousePosition.x;
-    const dy = mouseY - this.lastMousePosition.y;
 
-    // Adjust the bbox using dx and dy
+    // Adjust the bbox using dx only (keep y the same)
     const bbox = this.recognizedText[this.resizeTargetIndex].bbox;
 
     // Store old bbox values for clearing purposes
     const oldX1 = bbox.x1;
 
     bbox.x1 += dx;
-    bbox.y1 += dy;
 
     this.lastMousePosition = { x: mouseX, y: mouseY };
 
