@@ -68,39 +68,38 @@ onImageLoad(event: any) {
   canvas.height = event.target.height;
   this.canvasContext = canvas.getContext('2d') ?? undefined;
 }
-highlightText(index: number) {
+  highlightText(index: number) {
+    this.clearCanvas();
 
-  this.clearCanvas();
+    if (!this.canvasContext) {
+      return;
+    }
+    if (!this.canvasElement) {
+      return;
+    }
+    for (let i = 0; i < this.lines.length; i++) {
+      const inputText = this.lines[i];
 
+      const recognizedLine = this.recognizedText[i]?.text;
 
-        if(!this.canvasContext){
-          return;
-        }
-        if(!this.canvasElement){
-          return;
-        }
-        for (let i = 0; i < this.lines.length; i++) {
-          const inputText = this.lines[i];
+      if (recognizedLine && inputText && recognizedLine.includes(inputText)) {
+        this.canvasContext.strokeStyle = 'red';
+        this.canvasContext.lineWidth = 3;
 
-          const recognizedLine = this.recognizedText[i]?.text;
+        const bbox = this.recognizedText[i].bbox;
+        const averageCharWidth = (bbox.x1 - bbox.x0) / recognizedLine.length;
 
-          if (recognizedLine?.startsWith(inputText) && inputText !== "") {
-              this.canvasContext.strokeStyle = 'red';
-              this.canvasContext.lineWidth = 3;
+        // Calculate the start position of the input text within the recognized line
+        const startIdx = recognizedLine.indexOf(inputText);
+        const x0 = bbox.x0 + averageCharWidth * startIdx;
+        const y0 = bbox.y0;
+        const x1 = x0 + averageCharWidth * inputText.length;
+        const y1 = bbox.y1;
 
-              const bbox = this.recognizedText[i].bbox;
-
-              const averageCharWidth = (bbox.x1 - bbox.x0) / recognizedLine.length;
-
-              const x0 = bbox.x0;
-              const y0 = bbox.y0;
-              const x1 = bbox.x0 + averageCharWidth * inputText.length +3;
-              const y1 = bbox.y1;
-
-              this.canvasContext.strokeRect(x0, y0, x1, y1 - y0);
-          }
+        this.canvasContext.strokeRect(x0, y0, x1 - x0, y1 - y0);
       }
     }
+  }
 
 clearCanvas() {
   if(!this.canvasContext){
